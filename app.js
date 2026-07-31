@@ -131,6 +131,7 @@ function carregarLogosDisponiveis() {
   
   // Drag & drop para logos
   let logoSelecionada = null;
+  let logoUploadTargetId = null; // ID do time alvo para upload
   
   grid.addEventListener("dragstart", e => {
     const item = e.target.closest(".logo-item");
@@ -199,13 +200,38 @@ function carregarLogosDisponiveis() {
     }
   });
   
-  // Input de arquivo para logo customizada
+  // Input de arquivo para logo customizada (com suporte a câmera/galeria no mobile)
   const fileInput = document.createElement("input");
   fileInput.type = "file";
   fileInput.accept = "image/*";
+  fileInput.capture = "environment"; // Abre câmera no mobile
   fileInput.style.display = "none";
   fileInput.id = "logo-upload";
   document.body.appendChild(fileInput);
+  
+  // Canvas para redimensionar imagem (máx 200x240)
+  function redimensionarImagem(dataUrl, maxW, maxH, callback) {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      let { width, height } = img;
+      
+      // Calcular nova dimensão mantendo proporção
+      if (width > maxW || height > maxH) {
+        const ratio = Math.min(maxW / width, maxH / height);
+        width = Math.round(width * ratio);
+        height = Math.round(height * ratio);
+      }
+      
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(img, 0, 0, width, height);
+      // Qualidade 0.85 para balancear tamanho/qualidade
+      callback(canvas.toDataURL("image/jpeg", 0.85));
+    };
+    img.src = dataUrl;
+  }
   
   fileInput.addEventListener("change", e => {
     const file = e.target.files[0];
@@ -213,12 +239,22 @@ function carregarLogosDisponiveis() {
       const reader = new FileReader();
       reader.onload = evt => {
         const dataUrl = evt.target.result;
-        const timeSemLogo = state.times.find(t => !t.logo) || state.times[state.times.length - 1];
-        if (timeSemLogo) {
-          timeSemLogo.logo = dataUrl;
-          salvar();
-          renderLista();
-        }
+        // Redimensionar para máx 200x240 antes de salvar
+        redimensionarImagem(dataUrl, 200, 240, (resizedDataUrl) => {
+          let timeAlvo = null;
+          if (logoUploadTargetId) {
+            timeAlvo = state.times.find(t => t.id === logoUploadTargetId);
+            logoUploadTargetId = null;
+          }
+          if (!timeAlvo) {
+            timeAlvo = state.times.find(t => !t.logo) || state.times[state.times.length - 1];
+          }
+          if (timeAlvo) {
+            timeAlvo.logo = resizedDataUrl;
+            salvar();
+            renderLista();
+          }
+        });
       };
       reader.readAsDataURL(file);
     }
@@ -443,6 +479,11 @@ function renderLista() {
       logoPreview.textContent = "📷";
       logoPreview.title = "Clique ou arraste uma logo aqui";
     }
+    // Click no preview abre seletor de arquivo para ESTE time
+    logoPreview.addEventListener("click", () => {
+      logoUploadTargetId = t.id;
+      fileInput.click();
+    });
 
     const inpNome = document.createElement("input");
     inpNome.placeholder = "Nome do time";
