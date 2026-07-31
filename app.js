@@ -819,15 +819,15 @@ function abrirPaginaLimpa() {
     return;
   }
   
-  // Salvar dados para a página limpa
+  // Salvar dados para a página limpa (localStorage é compartilhado entre abas)
   const dados = {
     slots: state.slots.map(t => t ? { nome: t.nome, regiao: t.regiao, logo: t.logo, _cor: t._cor } : null),
     rodadas: state.rodadas,
     regra: state.regra,
-    times: state.times.map(t => ({ nome: t.nome, regiao: t.regiao, logo: t.logo, _cor: t._cor }))
+    timestamp: Date.now()
   };
   
-  sessionStorage.setItem("sorteio-pagina-limpa", JSON.stringify(dados));
+  localStorage.setItem("sorteio-pagina-limpa", JSON.stringify(dados));
   
   // Abrir em nova janela
   const url = window.location.origin + window.location.pathname + "?view=clean";
@@ -969,24 +969,32 @@ function initPaginaLimpa() {
     document.getElementById("arvore-scroll").style.border = "none";
     document.getElementById("arvore-scroll").style.background = "transparent";
     
-    // Carregar dados do sessionStorage
+    // Carregar dados do localStorage (compartilhado entre abas)
     try {
-      const raw = sessionStorage.getItem("sorteio-pagina-limpa");
+      const raw = localStorage.getItem("sorteio-pagina-limpa");
       if (raw) {
         const dados = JSON.parse(raw);
-        state.slots = dados.slots.map(t => t ? Object.assign({}, t, { _cor: t._cor }) : null);
-        state.rodadas = dados.rodadas;
-        state.regra = dados.regra;
-        // Re-renderizar árvore
-        renderArvore(state.slots, state.rodadas);
-        // Zoom inicial 100% para página limpa
-        zoomAtual = 1.0;
-        document.getElementById("zoom").value = 100;
-        document.getElementById("zoom-val").textContent = "100%";
-        aplicarZoom();
+        // Verificar se os dados são recentes (últimos 5 minutos)
+        if (Date.now() - (dados.timestamp || 0) < 5 * 60 * 1000) {
+          state.slots = dados.slots.map(t => t ? Object.assign({}, t, { _cor: t._cor }) : null);
+          state.rodadas = dados.rodadas;
+          state.regra = dados.regra;
+          // Re-renderizar árvore
+          renderArvore(state.slots, state.rodadas);
+          // Zoom inicial 100% para página limpa
+          zoomAtual = 1.0;
+          document.getElementById("zoom").value = 100;
+          document.getElementById("zoom-val").textContent = "100%";
+          aplicarZoom();
+        } else {
+          document.getElementById("arvore").innerHTML = '<div style="text-align:center;padding:40px;color:#666;">Sessão expirada. Faça um novo sorteio.</div>';
+        }
+      } else {
+        document.getElementById("arvore").innerHTML = '<div style="text-align:center;padding:40px;color:#666;">Nenhum sorteio encontrado.</div>';
       }
     } catch (e) {
       console.error("Erro ao carregar página limpa:", e);
+      document.getElementById("arvore").innerHTML = '<div style="text-align:center;padding:40px;color:#d00;">Erro ao carregar dados.</div>';
     }
     return true;
   }
