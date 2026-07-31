@@ -261,20 +261,26 @@ function carregarLogosDisponiveis() {
     fileInput.value = "";
   });
   
-  // Botão para upload de logo customizada
-  const btnUpload = document.createElement("button");
-  btnUpload.type = "button";
-  btnUpload.className = "btn btn-ghost";
-  btnUpload.textContent = "📤 Upload logo";
-  btnUpload.style.marginTop = "10px";
-  btnUpload.addEventListener("click", () => fileInput.click());
-  
-  const painelLogos = document.getElementById("painel-logos");
-  if (painelLogos) {
-    const acoes = painelLogos.querySelector(".acoes") || document.createElement("div");
-    acoes.className = "acoes";
-    acoes.appendChild(btnUpload);
-    if (!painelLogos.querySelector(".acoes")) painelLogos.appendChild(acoes);
+  // Botão para upload de logo customizada (só adiciona uma vez)
+  if (!document.getElementById("btn-upload-logo")) {
+    const btnUpload = document.createElement("button");
+    btnUpload.id = "btn-upload-logo";
+    btnUpload.type = "button";
+    btnUpload.className = "btn btn-ghost";
+    btnUpload.textContent = "📤 Upload logo";
+    btnUpload.style.marginTop = "10px";
+    btnUpload.addEventListener("click", () => fileInput.click());
+    
+    const painelLogos = document.getElementById("painel-logos");
+    if (painelLogos) {
+      let acoes = painelLogos.querySelector(".acoes");
+      if (!acoes) {
+        acoes = document.createElement("div");
+        acoes.className = "acoes";
+        painelLogos.appendChild(acoes);
+      }
+      acoes.appendChild(btnUpload);
+    }
   }
 }
 
