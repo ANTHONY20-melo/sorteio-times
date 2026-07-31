@@ -200,11 +200,11 @@ function carregarLogosDisponiveis() {
     }
   });
   
-  // Input de arquivo para logo customizada (com suporte a câmera/galeria no mobile)
+  // Input de arquivo para logo customizada (abre galeria no mobile)
   const fileInput = document.createElement("input");
   fileInput.type = "file";
   fileInput.accept = "image/*";
-  fileInput.capture = "environment"; // Abre câmera no mobile
+  // Sem capture="environment" para abrir galeria por padrão
   fileInput.style.display = "none";
   fileInput.id = "logo-upload";
   document.body.appendChild(fileInput);
