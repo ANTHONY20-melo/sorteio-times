@@ -20,7 +20,20 @@ Sorteio de times para campeonatos com **proteção regional** (times da mesma re
 
 ## Deploy
 
-Disponível online em: *(será atualizado após deploy no Vercel)*
+### GitHub
+Repositório: https://github.com/ANTHONY20-melo/sorteio-times
+
+### Vercel (deploy manual)
+1. Acesse https://vercel.com/new
+2. Importe o repositório `ANTHONY20-melo/sorteio-times`
+3. Clique em **Deploy**
+4. O app ficará disponível em `https://sorteio-times.vercel.app` (ou URL similar)
+
+Ou via CLI:
+```bash
+vercel login
+vercel --yes
+```
 
 ## Tecnologias
 
