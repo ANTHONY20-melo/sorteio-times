@@ -431,6 +431,72 @@ header p { color: var(--muted); margin-top: 6px; font-size: 14px; }
 .reveal-times .rv { display: flex; flex-direction: column; gap: 2px; align-items: center; min-width: 0; }
 .reveal-times .rv small { font-size: 10.5px; color: var(--muted); font-weight: 500; }
 
+/* ===== Página Limpa (view=clean) ===== */
+body.clean-view {
+  background: #fff !important;
+  min-height: 100vh;
+}
+body.clean-view .app {
+  max-width: 100%;
+  padding: 0;
+  margin: 0;
+}
+body.clean-view #tela-resultado {
+  display: block !important;
+}
+body.clean-view #arvore-scroll {
+  border: none !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+  overflow: visible !important;
+  height: auto !important;
+  min-height: 100vh;
+}
+body.clean-view .col-titulo {
+  background: #f5f5f5 !important;
+  color: #333 !important;
+  border-bottom: 1px solid #ddd !important;
+}
+body.clean-view .jogo {
+  background: #fff !important;
+  border: 1px solid #e0e0e0 !important;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08) !important;
+  opacity: 1 !important;
+  animation: none !important;
+  transform: none !important;
+}
+body.clean-view .jogo.pendente {
+  background: #fafafa !important;
+  border-style: dashed !important;
+  border-color: #ddd !important;
+}
+body.clean-view .time {
+  color: #222 !important;
+}
+body.clean-view .time .nome { color: #222 !important; }
+body.clean-view .time .regiao {
+  background: #f0f0f0 !important;
+  color: #666 !important;
+}
+body.clean-view .bolinha { box-shadow: 0 0 6px currentColor !important; }
+body.clean-view .time-logo { box-shadow: 0 0 4px rgba(0,0,0,0.15) !important; }
+body.clean-view .conector-h {
+  background: linear-gradient(90deg, #ddd, #999) !important;
+  opacity: 1 !important;
+}
+body.clean-view .conector-v { background: #999 !important; opacity: 1 !important; }
+body.clean-view .jogo-num {
+  background: #f0f0f0 !important;
+  color: #999 !important;
+}
+
+/* Print styles para página limpa */
+@media print {
+  body.clean-view .jogo { break-inside: avoid; page-break-inside: avoid; }
+  body.clean-view .col-titulo { position: sticky; top: 0; }
+}
+
 /* Responsivo */
 @media (max-width: 640px) {
   .app { padding: 18px 12px 60px; }

@@ -712,6 +712,11 @@ function montarTime(t) {
   const div = document.createElement("div");
   div.className = "time";
   
+  // Borda lateral colorida pela região
+  if (t._cor) {
+    div.style.borderLeft = "4px solid " + t._cor;
+  }
+  
   // Logo do time
   if (t.logo) {
     const logo = document.createElement("img");
@@ -736,6 +741,8 @@ function montarTime(t) {
     rg.className = "regiao";
     rg.textContent = reg;
     rg.title = reg;
+    rg.style.background = t._cor + "33"; // 20% opacity da cor da região
+    rg.style.borderColor = t._cor + "80";
     div.appendChild(rg);
   }
   return div;
@@ -804,6 +811,27 @@ function iniciarSorteio() {
   msgResultado.textContent = msg;
 
   animarSorteio();
+}
+
+function abrirPaginaLimpa() {
+  if (!state.slots || !state.rodadas) {
+    toast("Faça um sorteio primeiro!", true);
+    return;
+  }
+  
+  // Salvar dados para a página limpa
+  const dados = {
+    slots: state.slots.map(t => t ? { nome: t.nome, regiao: t.regiao, logo: t.logo, _cor: t._cor } : null),
+    rodadas: state.rodadas,
+    regra: state.regra,
+    times: state.times.map(t => ({ nome: t.nome, regiao: t.regiao, logo: t.logo, _cor: t._cor }))
+  };
+  
+  sessionStorage.setItem("sorteio-pagina-limpa", JSON.stringify(dados));
+  
+  // Abrir em nova janela
+  const url = window.location.origin + window.location.pathname + "?view=clean";
+  window.open(url, "_blank", "noopener,noreferrer");
 }
 
 function animarSorteio() {
@@ -894,12 +922,20 @@ document.getElementById("btn-adicionar").addEventListener("click", () => addTime
 document.getElementById("btn-exemplo").addEventListener("click", preencherExemplo);
 btnSortear.addEventListener("click", iniciarSorteio);
 
+document.getElementById("btn-voltar").addEventListener("click", () => {
+  painelRegra.style.display = "block";
+  painelTimes.style.display = "block";
+  telaResultado.style.display = "none";
+  document.getElementById("painel-logos").style.display = "block";
+});
 document.getElementById("btn-novo").addEventListener("click", () => iniciarSorteio());
 document.getElementById("btn-editar").addEventListener("click", () => {
   painelRegra.style.display = "block";
   painelTimes.style.display = "block";
   telaResultado.style.display = "none";
+  document.getElementById("painel-logos").style.display = "block";
 });
+document.getElementById("btn-pagina-limpa").addEventListener("click", abrirPaginaLimpa);
 
 const zoomInput = document.getElementById("zoom");
 const zoomVal = document.getElementById("zoom-val");
@@ -917,10 +953,57 @@ listaEl.addEventListener("keydown", e => {
   }
 });
 
+/* ---------- Página Limpa (view=clean) ---------- */
+
+function initPaginaLimpa() {
+  const params = new URLSearchParams(window.location.search);
+  if (params.get("view") === "clean") {
+    // Modo página limpa - esconder tudo exceto a árvore
+    document.body.classList.add("clean-view");
+    painelRegra.style.display = "none";
+    painelTimes.style.display = "none";
+    document.getElementById("painel-logos").style.display = "none";
+    telaResultado.style.display = "block";
+    document.querySelector(".resultado-top").style.display = "none";
+    document.querySelector(".zoom-row").style.display = "none";
+    document.getElementById("arvore-scroll").style.border = "none";
+    document.getElementById("arvore-scroll").style.background = "transparent";
+    
+    // Carregar dados do sessionStorage
+    try {
+      const raw = sessionStorage.getItem("sorteio-pagina-limpa");
+      if (raw) {
+        const dados = JSON.parse(raw);
+        state.slots = dados.slots.map(t => t ? Object.assign({}, t, { _cor: t._cor }) : null);
+        state.rodadas = dados.rodadas;
+        state.regra = dados.regra;
+        // Re-renderizar árvore
+        renderArvore(state.slots, state.rodadas);
+        // Zoom inicial 100% para página limpa
+        zoomAtual = 1.0;
+        document.getElementById("zoom").value = 100;
+        document.getElementById("zoom-val").textContent = "100%";
+        aplicarZoom();
+      }
+    } catch (e) {
+      console.error("Erro ao carregar página limpa:", e);
+    }
+    return true;
+  }
+  return false;
+}
+
 /* ---------- Init ---------- */
 
 carregar();
-renderLista();
+if (!initPaginaLimpa()) {
+  renderLista();
+  carregarLogosDisponiveis();
+  // Mostrar painel de logos se houver times
+  if (state.times.length > 0) {
+    document.getElementById("painel-logos").style.display = "block";
+  }
+}
 carregarLogosDisponiveis();
 
 // Mostrar painel de logos se houver times
