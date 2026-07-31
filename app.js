@@ -1,5 +1,3 @@
-"use strict";
-
 /* =========================================================
    LÓGICA PURA — Chaveamento com proteção regional
    ========================================================= */
@@ -57,6 +55,191 @@ function semDuplaFolga(slots) {
     if (!slots[2 * k] && !slots[2 * k + 1]) return false;
   }
   return true;
+}
+
+/* =========================================================
+   SISTEMA DE LOGOS
+   ========================================================= */
+
+// Mapeamento de logos conhecidos (nome do arquivo -> nome do time normalizado)
+const LOGOS_CONHECIDOS = [
+  "BOCA DA MATA CITY.jpg",
+  "BRASA.jpg",
+  "CASTELO CITY.jpg",
+  "CONDOR CITY.jpg",
+  "DFC.jpg",
+  "DOM CITY.jpg",
+  "ESQUADRÃO DA FÉ.jpg",
+  "ESQUADRÃO NB.jpg",
+  "FÊNIX.jpg",
+  "GUERREIROS DA FÉ.jpg",
+  "INVICTOS DA FÉ.jpg",
+  "MENORES MB.jpg",
+  "NOVA CANAÃ.jpg",
+  "NOVA JUVENTUDE.jpg",
+  "OUSADIA E ALEGRIA.jpg",
+  "PFC.jpg",
+  "PSJ.jpg",
+  "RDG.jpg",
+  "UNION CITY.jpg",
+  "VISIONÁRIOS.jpg",
+  "ÁGUIAS FC.jpg"
+];
+
+function normalizarNomeArquivo(nome) {
+  return nome
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, "");
+}
+
+function encontrarLogoParaTime(nomeTime) {
+  const normTime = normalizarNomeArquivo(nomeTime);
+  for (const logo of LOGOS_CONHECIDOS) {
+    const normLogo = normalizarNomeArquivo(logo.replace(".jpg", ""));
+    if (normTime === normLogo || normTime.includes(normLogo) || normLogo.includes(normTime)) {
+      return "logos/" + logo;
+    }
+  }
+  return null;
+}
+
+function carregarLogosDisponiveis() {
+  const grid = document.getElementById("logos-grid");
+  if (!grid) return;
+  
+  grid.innerHTML = "";
+  for (const logo of LOGOS_CONHECIDOS) {
+    const item = document.createElement("div");
+    item.className = "logo-item";
+    item.draggable = true;
+    item.dataset.logo = "logos/" + logo;
+    item.title = logo.replace(".jpg", "");
+    
+    const img = document.createElement("img");
+    img.src = "logos/" + logo;
+    img.alt = logo.replace(".jpg", "");
+    img.loading = "lazy";
+    
+    const label = document.createElement("span");
+    label.textContent = logo.replace(".jpg", "");
+    
+    item.appendChild(img);
+    item.appendChild(label);
+    grid.appendChild(item);
+  }
+  
+  // Drag & drop para logos
+  let logoSelecionada = null;
+  
+  grid.addEventListener("dragstart", e => {
+    const item = e.target.closest(".logo-item");
+    if (item) {
+      logoSelecionada = item.dataset.logo;
+      item.classList.add("arrastando");
+      e.dataTransfer.setData("text/plain", logoSelecionada);
+    }
+  });
+  
+  grid.addEventListener("dragend", e => {
+    const item = e.target.closest(".logo-item");
+    if (item) item.classList.remove("arrastando");
+  });
+  
+  // Click para selecionar logo
+  grid.addEventListener("click", e => {
+    const item = e.target.closest(".logo-item");
+    if (item) {
+      document.querySelectorAll(".logo-item.selecionada").forEach(el => el.classList.remove("selecionada"));
+      item.classList.add("selecionada");
+      logoSelecionada = item.dataset.logo;
+    }
+  });
+  
+  // Drop zones nos times
+  const listaTimes = document.getElementById("lista-times");
+  
+  listaTimes.addEventListener("dragover", e => {
+    e.preventDefault();
+    const linha = e.target.closest(".linha-time");
+    if (linha) linha.classList.add("drag-over");
+  });
+  
+  listaTimes.addEventListener("dragleave", e => {
+    const linha = e.target.closest(".linha-time");
+    if (linha) linha.classList.remove("drag-over");
+  });
+  
+  listaTimes.addEventListener("drop", e => {
+    e.preventDefault();
+    const linha = e.target.closest(".linha-time");
+    if (linha) {
+      linha.classList.remove("drag-over");
+      const id = Number(linha.dataset.id);
+      const time = state.times.find(t => t.id === id);
+      if (time && logoSelecionada) {
+        time.logo = logoSelecionada;
+        salvar();
+        renderLista();
+      }
+    }
+  });
+  
+  // Click na linha do time para atribuir logo selecionada
+  listaTimes.addEventListener("click", e => {
+    if (logoSelecionada && e.target.closest(".linha-time") && !e.target.matches("input, button")) {
+      const linha = e.target.closest(".linha-time");
+      const id = Number(linha.dataset.id);
+      const time = state.times.find(t => t.id === id);
+      if (time) {
+        time.logo = logoSelecionada;
+        salvar();
+        renderLista();
+      }
+    }
+  });
+  
+  // Input de arquivo para logo customizada
+  const fileInput = document.createElement("input");
+  fileInput.type = "file";
+  fileInput.accept = "image/*";
+  fileInput.style.display = "none";
+  fileInput.id = "logo-upload";
+  document.body.appendChild(fileInput);
+  
+  fileInput.addEventListener("change", e => {
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = evt => {
+        const dataUrl = evt.target.result;
+        const timeSemLogo = state.times.find(t => !t.logo) || state.times[state.times.length - 1];
+        if (timeSemLogo) {
+          timeSemLogo.logo = dataUrl;
+          salvar();
+          renderLista();
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+    fileInput.value = "";
+  });
+  
+  // Botão para upload de logo customizada
+  const btnUpload = document.createElement("button");
+  btnUpload.type = "button";
+  btnUpload.className = "btn btn-ghost";
+  btnUpload.textContent = "📤 Upload logo";
+  btnUpload.style.marginTop = "10px";
+  btnUpload.addEventListener("click", () => fileInput.click());
+  
+  const painelLogos = document.getElementById("painel-logos");
+  if (painelLogos) {
+    const acoes = painelLogos.querySelector(".acoes") || document.createElement("div");
+    acoes.className = "acoes";
+    acoes.appendChild(btnUpload);
+    if (!painelLogos.querySelector(".acoes")) painelLogos.appendChild(acoes);
+  }
 }
 
 /*
@@ -173,7 +356,7 @@ function corRegiao(nome) {
    ========================================================= */
 
 const state = {
-  times: [],      // {id, nome, regiao, _regiao, _cor}
+  times: [],      // {id, nome, regiao, logo, _regiao, _cor}
   regra: "semi",
   slots: null,
   rodadas: 0,
@@ -208,6 +391,10 @@ let nextId = 1;
 function normalizarTime(t) {
   t._regiao = (t.regiao || "").trim() || ("#auto-" + t.id);
   t._cor = corRegiao((t.regiao || "").trim() || "Sem região");
+  // Auto-match logo se não tiver
+  if (!t.logo && t.nome) {
+    t.logo = encontrarLogoParaTime(t.nome);
+  }
   return t;
 }
 
@@ -242,6 +429,20 @@ function renderLista() {
   for (const t of state.times) {
     const linha = document.createElement("div");
     linha.className = "linha-time";
+    linha.dataset.id = t.id;
+
+    // Preview da logo
+    const logoPreview = document.createElement("div");
+    logoPreview.className = "logo-preview";
+    if (t.logo) {
+      const img = document.createElement("img");
+      img.src = t.logo;
+      img.alt = t.nome;
+      logoPreview.appendChild(img);
+    } else {
+      logoPreview.textContent = "📷";
+      logoPreview.title = "Clique ou arraste uma logo aqui";
+    }
 
     const inpNome = document.createElement("input");
     inpNome.placeholder = "Nome do time";
@@ -264,7 +465,7 @@ function renderLista() {
     btnRem.title = "Remover time";
     btnRem.addEventListener("click", () => removerTime(t.id));
 
-    linha.append(inpNome, inpReg, btnRem);
+    linha.append(logoPreview, inpNome, inpReg, btnRem);
     listaEl.appendChild(linha);
   }
   atualizarDatalist();
@@ -306,12 +507,18 @@ function addTime(nome, regiao) {
   salvar();
   const inputs = listaEl.querySelectorAll("input");
   if (inputs.length) inputs[inputs.length - 3].focus();
+  // Mostrar painel de logos
+  document.getElementById("painel-logos").style.display = "block";
 }
 
 function removerTime(id) {
   state.times = state.times.filter(t => t.id !== id);
   renderLista();
   salvar();
+  // Esconder painel se não houver times
+  if (state.times.length === 0) {
+    document.getElementById("painel-logos").style.display = "none";
+  }
 }
 
 function preencherExemplo() {
@@ -325,6 +532,8 @@ function preencherExemplo() {
   }
   renderLista();
   salvar();
+  // Mostrar painel de logos
+  document.getElementById("painel-logos").style.display = "block";
 }
 
 /* ---------- Toast de erro ---------- */
@@ -461,6 +670,16 @@ function renderArvore(slots, p) {
 function montarTime(t) {
   const div = document.createElement("div");
   div.className = "time";
+  
+  // Logo do time
+  if (t.logo) {
+    const logo = document.createElement("img");
+    logo.className = "time-logo";
+    logo.src = t.logo;
+    logo.alt = t.nome;
+    div.appendChild(logo);
+  }
+  
   const b = document.createElement("span");
   b.className = "bolinha";
   b.style.color = t._cor;
@@ -576,9 +795,9 @@ function animarSorteio() {
     card.innerHTML =
       '<div class="reveal-jogo">Jogo ' + (kReveal + 1) + ' · ' + nomeRodada(1, state.rodadas) + '</div>' +
       '<div class="reveal-times">' +
-      '<span class="rv">' + esc(t1.nome || "?") + '<small>' + esc((t1.regiao || "").trim() || "—") + '</small></span>' +
+      '<span class="rv">' + (t1.logo ? '<img class="reveal-logo" src="' + esc(t1.logo) + '" alt="">' : '') + esc(t1.nome || "?") + '<small>' + esc((t1.regiao || "").trim() || "—") + '</small></span>' +
       '<span class="reveal-vs">VS</span>' +
-      '<span class="rv">' + esc(t2.nome || "?") + '<small>' + esc((t2.regiao || "").trim() || "—") + '</small></span>' +
+      '<span class="rv">' + (t2.logo ? '<img class="reveal-logo" src="' + esc(t2.logo) + '" alt="">' : '') + esc(t2.nome || "?") + '<small>' + esc((t2.regiao || "").trim() || "—") + '</small></span>' +
       '</div>';
     revealContainer.appendChild(card);
     await espera(30);
@@ -661,6 +880,12 @@ listaEl.addEventListener("keydown", e => {
 
 carregar();
 renderLista();
+carregarLogosDisponiveis();
+
+// Mostrar painel de logos se houver times
+if (state.times.length > 0) {
+  document.getElementById("painel-logos").style.display = "block";
+}
 
 // Exposição para testes automatizados
 window.__sorteio = {
