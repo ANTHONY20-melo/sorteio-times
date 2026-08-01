@@ -78,11 +78,34 @@
       <input type="range" id="zoom" min="40" max="100" value="85">
       <label id="zoom-val">85%</label>
     </div>
-    <div id="arvore-scroll">
-      <div id="arvore"></div>
+    <div class="tabs">
+      <button class="tab ativa" id="tab-arvore" type="button">🏆 Chaveamento</button>
+      <button class="tab" id="tab-geral" type="button">📊 Geral · Classificação</button>
+    </div>
+    <div id="area-arvore">
+      <div id="arvore-scroll">
+        <div id="arvore"></div>
+      </div>
+    </div>
+    <div id="painel-geral" style="display:none;">
+      <div class="tabela-geral-scroll">
+        <table class="tabela-geral" id="tabela-geral"></table>
+      </div>
+      <div class="historico-titulo">Histórico de partidas</div>
+      <div id="historico-partidas"></div>
     </div>
   </section>
 
+</div>
+
+<!-- MODAL DE RESULTADO DE PARTIDA -->
+<div id="modal-resultado" style="display:none;">
+  <div class="modal-backdrop" id="modal-backdrop"></div>
+  <div class="modal-card">
+    <button class="modal-fechar" id="modal-fechar" type="button">✕</button>
+    <div id="modal-conteudo"></div>
+    <div class="modal-acoes" id="modal-acoes"></div>
+  </div>
 </div>
 
 <!-- OVERLAY DE SORTEIO -->

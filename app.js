@@ -402,7 +402,8 @@ const state = {
   regra: "semi",
   slots: null,
   rodadas: 0,
-  chave: 0        // potência de 2 usada (com folgas quando N não é potência)
+  chave: 0,        // potência de 2 usada (com folgas quando N não é potência)
+  resultados: {}   // "r-k" -> {gols1, gols2, penais1, penais2, cartoes:{a1,v1,a2,v2}}
 };
 
 const LS_KEY = "sorteio-times-v1";
@@ -415,6 +416,7 @@ function carregar() {
       const d = JSON.parse(raw);
       if (Array.isArray(d.times)) state.times = d.times;
       if (d.regra === "semi" || d.regra === "final") state.regra = d.regra;
+      if (d.resultados && typeof d.resultados === "object") state.resultados = d.resultados;
     }
   } catch (e) { /* ignora */ }
   for (const t of state.times) normalizarTime(t);
@@ -423,7 +425,11 @@ function carregar() {
 
 function salvar() {
   try {
-    localStorage.setItem(LS_KEY, JSON.stringify({ times: state.times, regra: state.regra }));
+    localStorage.setItem(LS_KEY, JSON.stringify({
+      times: state.times,
+      regra: state.regra,
+      resultados: state.resultados
+    }));
   } catch (e) { /* ignora */ }
 }
 
@@ -612,6 +618,8 @@ const TITLE_H = 36;  // altura da faixa de título da rodada (espaço reservado 
 const COL_W = 250;
 const GAP_W = 92;
 
+let jogoIdMap = {};  // "r-k" -> id global do jogo (usado no histórico e no modal)
+
 function renderArvore(slots, p) {
   const T = slots.length;
   larguraTotal = p * COL_W + (p - 1) * GAP_W;
@@ -624,7 +632,7 @@ function renderArvore(slots, p) {
 
   const topoPorJogo = {};   // "r-k" -> top do card (px)
   const centroPorJogo = {}; // "r-k" -> centro vertical (px)
-  const jogoIdMap = {};     // "r-k" -> id global do jogo
+  jogoIdMap = {};           // "r-k" -> id global do jogo
   let jogoId = 0;
 
   // -- Colunas com título --
@@ -670,18 +678,30 @@ function renderArvore(slots, p) {
       num.textContent = "Jogo " + jogoId;
       jogo.appendChild(num);
 
-      if (r === 1) {
-        const sA = slots[2 * k];
-        const sB = slots[2 * k + 1];
-        if (!sA || !sB) jogo.classList.add("walkover");
-        jogo.appendChild(sA ? montarTime(sA) : montarFolga());
-        jogo.appendChild(sB ? montarTime(sB) : montarFolga());
-      } else {
-        const filho1 = r - 1 + "-" + (2 * k);
-        const filho2 = r - 1 + "-" + (2 * k + 1);
-        jogo.classList.add("pendente");
-        jogo.appendChild(montarPlaceholder("Vencedor do Jogo " + jogoIdMap[filho1]));
-        jogo.appendChild(montarPlaceholder("Vencedor do Jogo " + jogoIdMap[filho2]));
+      const jogoKey = r + "-" + k;
+      const timesJogo = timesDoJogo(r, k);
+      const t1 = timesJogo[0];
+      const t2 = timesJogo[1];
+      const res = state.resultados[jogoKey] || null;
+
+      const ehFolga = t1 === null || t2 === null;
+      if (res) jogo.classList.add("jogado");
+      else if (ehFolga) jogo.classList.add("walkover");
+      else if (t1 === undefined || t2 === undefined) jogo.classList.add("pendente");
+      else jogo.classList.add("jogavel");
+
+      montarLado(jogo, t1, res, 1, jogoKey, r, k);
+      montarLado(jogo, t2, res, 2, jogoKey, r, k);
+
+      if (res && res.penais1 != null && res.penais2 != null) {
+        const pn = document.createElement("div");
+        pn.className = "penais-txt";
+        pn.textContent = "PÊNALTIS " + res.penais1 + " x " + res.penais2;
+        jogo.appendChild(pn);
+      }
+
+      if (jogo.classList.contains("jogavel") || jogo.classList.contains("jogado")) {
+        jogo.addEventListener("click", () => abrirModalResultado(r, k));
       }
       arvoreInner.appendChild(jogo);
 
@@ -714,7 +734,8 @@ function renderArvore(slots, p) {
   aplicarZoom();
 }
 
-function montarTime(t) {
+function montarTime(t, opts) {
+  opts = opts || {};
   const div = document.createElement("div");
   div.className = "time";
   
@@ -741,6 +762,35 @@ function montarTime(t) {
   nome.title = t.nome || "";
   div.appendChild(b);
   div.appendChild(nome);
+
+  // Placar (gols) quando a partida já foi registrada
+  if (opts.placar !== undefined) {
+    const pl = document.createElement("span");
+    pl.className = "placar";
+    pl.textContent = opts.placar;
+    div.appendChild(pl);
+  }
+
+  // Cartões (amarelos/vermelhos)
+  if (opts.cartoes && (opts.cartoes.am > 0 || opts.cartoes.vm > 0)) {
+    const cc = document.createElement("span");
+    cc.className = "cartoes";
+    cc.title = "Amarelos: " + (opts.cartoes.am || 0) + " · Vermelhos: " + (opts.cartoes.vm || 0);
+    if (opts.cartoes.am > 0) {
+      const am = document.createElement("span");
+      am.className = "am";
+      am.textContent = "🟨" + opts.cartoes.am;
+      cc.appendChild(am);
+    }
+    if (opts.cartoes.vm > 0) {
+      const vm = document.createElement("span");
+      vm.className = "vm";
+      vm.textContent = "🟥" + opts.cartoes.vm;
+      cc.appendChild(vm);
+    }
+    div.appendChild(cc);
+  }
+
   const reg = (t.regiao || "").trim();
   if (reg) {
     const rg = document.createElement("span");
@@ -789,6 +839,449 @@ function aplicarZoom() {
   arvoreInner.style.transform = "scale(" + zoomAtual + ")";
 }
 
+/* =========================================================
+   RESULTADOS DE PARTIDA — placar, cartões, pênaltis,
+   avanço automático do vencedor, tabela Geral e histórico
+   ========================================================= */
+
+// Lado vencedor do jogo "r-k": 0 = não decidido, 1 = lado 1, 2 = lado 2
+function vencedorDe(key) {
+  const res = state.resultados[key];
+  if (!res) return 0;
+  if (res.gols1 > res.gols2) return 1;
+  if (res.gols2 > res.gols1) return 2;
+  const p1 = res.penais1;
+  const p2 = res.penais2;
+  if (p1 != null && p2 != null && p1 !== p2) return p1 > p2 ? 1 : 2;
+  return 0;
+}
+
+// Time que avança do jogo (r,k) para a rodada seguinte:
+// - resultado registrado -> vencedor (pênaltis decidem o empate)
+// - folga (um lado null) -> o outro lado avança direto
+// - jogo ainda não jogado com os 2 times definidos -> undefined (pendente)
+function timeVencedorDoJogo(r, k, times) {
+  const side = vencedorDe(r + "-" + k);
+  if (side === 1) return times[0];
+  if (side === 2) return times[1];
+  const a = times[0];
+  const b = times[1];
+  if (a === null && b === null) return null;
+  if (a === null || a === undefined) return b;
+  if (b === null || b === undefined) return a;
+  return undefined;
+}
+
+// Participantes reais do jogo (r,k): [t1, t2]
+// null = folga (1ª rodada), undefined = vencedor ainda não definido
+function timesDoJogo(r, k) {
+  if (r === 1) {
+    return [state.slots[2 * k] || null, state.slots[2 * k + 1] || null];
+  }
+  const [a1, a2] = timesDoJogo(r - 1, 2 * k);
+  const [b1, b2] = timesDoJogo(r - 1, 2 * k + 1);
+  return [
+    timeVencedorDoJogo(r - 1, 2 * k, [a1, a2]),
+    timeVencedorDoJogo(r - 1, 2 * k + 1, [b1, b2])
+  ];
+}
+
+// Monta um lado do card de jogo (time, folga ou placeholder de vencedor)
+function montarLado(jogo, t, res, lado, key, r, k) {
+  if (t === null) {
+    jogo.appendChild(montarFolga());
+    return;
+  }
+  if (t === undefined) {
+    const kFilho = 2 * k + (lado - 1);
+    const chaveFilho = (r - 1) + "-" + kFilho;
+    jogo.appendChild(montarPlaceholder("Vencedor do Jogo " + (jogoIdMap[chaveFilho] || chaveFilho)));
+    return;
+  }
+  const opts = {};
+  const venceu = vencedorDe(key);
+  if (res) {
+    opts.placar = lado === 1 ? res.gols1 : res.gols2;
+    const cartoes = res.cartoes || { a1: 0, v1: 0, a2: 0, v2: 0 };
+    opts.cartoes = {
+      am: lado === 1 ? cartoes.a1 : cartoes.a2,
+      vm: lado === 1 ? cartoes.v1 : cartoes.v2
+    };
+  }
+  const el = montarTime(t, opts);
+  if (venceu === lado) {
+    el.classList.add("venceu");
+    const tick = document.createElement("span");
+    tick.className = "venceu-tick";
+    tick.textContent = "✓";
+    el.appendChild(tick);
+  }
+  jogo.appendChild(el);
+}
+
+/* ---------- Modal de lançamento de resultado ---------- */
+
+let modalJogoKey = null;
+
+function abrirModalResultado(r, k) {
+  const key = r + "-" + k;
+  const [t1, t2] = timesDoJogo(r, k);
+  if (t1 == null || t2 == null || t1 === undefined || t2 === undefined) return;
+  modalJogoKey = key;
+  const res = state.resultados[key] || null;
+  const conteudo = document.getElementById("modal-conteudo");
+  conteudo.innerHTML = "";
+
+  const tit = document.createElement("h3");
+  tit.textContent = "Jogo " + (jogoIdMap[key] || key) + " · Resultado";
+  conteudo.appendChild(tit);
+
+  const roda = document.createElement("div");
+  roda.className = "modal-roda";
+  roda.textContent = nomeRodada(r, state.rodadas);
+  conteudo.appendChild(roda);
+
+  conteudo.appendChild(montarLinhaModal(t1, 1, res));
+  conteudo.appendChild(montarLinhaModal(t2, 2, res));
+
+  // Pênaltis (decidem empate no tempo normal)
+  const checkWrap = document.createElement("label");
+  checkWrap.className = "check-penais";
+  const chk = document.createElement("input");
+  chk.type = "checkbox";
+  chk.id = "modal-penais-check";
+  const chkTxt = document.createElement("span");
+  chkTxt.textContent = "Decisão nos pênaltis (jogo empatou no tempo normal)";
+  checkWrap.appendChild(chk);
+  checkWrap.appendChild(chkTxt);
+
+  const penais = document.createElement("div");
+  penais.className = "m-penais";
+  penais.id = "modal-penais";
+  penais.appendChild(montarLadoPenais(t1, "modal-penais1"));
+  penais.appendChild(montarLadoPenais(t2, "modal-penais2"));
+  conteudo.appendChild(checkWrap);
+  conteudo.appendChild(penais);
+
+  const temPenais = res && res.penais1 != null && res.penais2 != null;
+  if (temPenais) {
+    chk.checked = true;
+    penais.classList.add("ativo");
+    document.getElementById("modal-penais1").value = res.penais1;
+    document.getElementById("modal-penais2").value = res.penais2;
+  }
+
+  // Placar empatado -> força pênaltis; diferente -> esconde
+  const sinc = () => {
+    const g1 = intModal("modal-gols1");
+    const g2 = intModal("modal-gols2");
+    if (g1 === g2) {
+      chk.checked = true;
+      penais.classList.add("ativo");
+    } else {
+      penais.classList.remove("ativo");
+    }
+  };
+  document.getElementById("modal-gols1").addEventListener("input", sinc);
+  document.getElementById("modal-gols2").addEventListener("input", sinc);
+  chk.addEventListener("change", () => penais.classList.toggle("ativo", chk.checked));
+
+  // Botões
+  const acoes = document.getElementById("modal-acoes");
+  acoes.innerHTML = "";
+  if (res) {
+    const btnApagar = document.createElement("button");
+    btnApagar.className = "btn btn-perigo";
+    btnApagar.textContent = "Apagar resultado";
+    btnApagar.addEventListener("click", apagarModalResultado);
+    acoes.appendChild(btnApagar);
+  }
+  const btnSalvar = document.createElement("button");
+  btnSalvar.className = "btn btn-primario";
+  btnSalvar.textContent = res ? "Atualizar resultado" : "Salvar resultado";
+  btnSalvar.addEventListener("click", salvarModalResultado);
+  acoes.appendChild(btnSalvar);
+
+  document.getElementById("modal-resultado").style.display = "flex";
+}
+
+function montarLinhaModal(time, lado, res) {
+  const cartoes = res ? (res.cartoes || { a1: 0, v1: 0, a2: 0, v2: 0 }) : { a1: 0, v1: 0, a2: 0, v2: 0 };
+  const linha = document.createElement("div");
+  linha.className = "m-time";
+
+  const info = document.createElement("div");
+  info.className = "mt-info";
+  if (time.logo) {
+    const img = document.createElement("img");
+    img.src = time.logo;
+    img.alt = time.nome || "";
+    info.appendChild(img);
+  }
+  const b = document.createElement("b");
+  b.textContent = time.nome || "Time sem nome";
+  info.appendChild(b);
+  linha.appendChild(info);
+
+  const campos = [
+    { lbl: "Gols", id: "modal-gols" + lado, val: lado === 1 ? (res ? res.gols1 : 0) : (res ? res.gols2 : 0) },
+    { lbl: "Amarelos", id: "modal-am" + lado, val: lado === 1 ? cartoes.a1 : cartoes.a2 },
+    { lbl: "Vermelhos", id: "modal-vm" + lado, val: lado === 1 ? cartoes.v1 : cartoes.v2 }
+  ];
+  for (const campo of campos) {
+    const wrap = document.createElement("div");
+    const l = document.createElement("div");
+    l.className = "m-lbl";
+    l.textContent = campo.lbl;
+    const inp = document.createElement("input");
+    inp.type = "number";
+    inp.min = "0";
+    inp.value = campo.val;
+    inp.id = campo.id;
+    inp.inputMode = "numeric";
+    wrap.appendChild(l);
+    wrap.appendChild(inp);
+    linha.appendChild(wrap);
+  }
+  return linha;
+}
+
+function montarLadoPenais(time, id) {
+  const lado = document.createElement("div");
+  lado.className = "mp-lado";
+  const span = document.createElement("span");
+  span.textContent = time.nome || "?";
+  span.title = time.nome || "";
+  const inp = document.createElement("input");
+  inp.type = "number";
+  inp.min = "0";
+  inp.value = "0";
+  inp.id = id;
+  inp.inputMode = "numeric";
+  lado.appendChild(span);
+  lado.appendChild(inp);
+  return lado;
+}
+
+function intModal(id) {
+  const el = document.getElementById(id);
+  const v = parseInt(el ? el.value : "", 10);
+  return isNaN(v) ? 0 : Math.max(0, v);
+}
+
+function salvarModalResultado() {
+  if (!modalJogoKey) return;
+  const gols1 = intModal("modal-gols1");
+  const gols2 = intModal("modal-gols2");
+  const am1 = intModal("modal-am1");
+  const vm1 = intModal("modal-vm1");
+  const am2 = intModal("modal-am2");
+  const vm2 = intModal("modal-vm2");
+
+  let penais1 = null;
+  let penais2 = null;
+  if (gols1 === gols2) {
+    penais1 = intModal("modal-penais1");
+    penais2 = intModal("modal-penais2");
+    if (penais1 === penais2) {
+      toast("Empate nos pênaltis não define vencedor. Verifique os valores.", true);
+      return;
+    }
+  }
+
+  state.resultados[modalJogoKey] = {
+    gols1: gols1,
+    gols2: gols2,
+    penais1: penais1,
+    penais2: penais2,
+    cartoes: { a1: am1, v1: vm1, a2: am2, v2: vm2 }
+  };
+  salvar();
+  fecharModalResultado();
+  renderArvore(state.slots, state.rodadas);
+  renderTabelaGeral();
+}
+
+function apagarModalResultado() {
+  if (!modalJogoKey) return;
+  delete state.resultados[modalJogoKey];
+  salvar();
+  fecharModalResultado();
+  renderArvore(state.slots, state.rodadas);
+  renderTabelaGeral();
+}
+
+function fecharModalResultado() {
+  modalJogoKey = null;
+  document.getElementById("modal-resultado").style.display = "none";
+}
+
+/* ---------- Tabela Geral (classificação) ---------- */
+
+function computarEstatisticas() {
+  const stats = [];
+  for (const t of state.times) {
+    stats.push({ time: t, J: 0, V: 0, D: 0, GP: 0, GC: 0, Am: 0, Vm: 0, Pts: 0 });
+  }
+  const porId = new Map(stats.map(s => [s.time.id, s]));
+  const p = state.rodadas;
+  if (state.slots && p > 0) {
+    const T = state.slots.length;
+    for (let r = 1; r <= p; r++) {
+      const qtd = T / Math.pow(2, r);
+      for (let k = 0; k < qtd; k++) {
+        const key = r + "-" + k;
+        const res = state.resultados[key];
+        if (!res) continue;
+        const [t1, t2] = timesDoJogo(r, k);
+        if (t1 == null || t2 == null || t1 === undefined || t2 === undefined) continue;
+        const s1 = porId.get(t1.id);
+        const s2 = porId.get(t2.id);
+        if (!s1 || !s2) continue;
+        s1.J++;
+        s2.J++;
+        s1.GP += res.gols1;
+        s1.GC += res.gols2;
+        s2.GP += res.gols2;
+        s2.GC += res.gols1;
+        const c = res.cartoes || { a1: 0, v1: 0, a2: 0, v2: 0 };
+        s1.Am += c.a1;
+        s1.Vm += c.v1;
+        s2.Am += c.a2;
+        s2.Vm += c.v2;
+        const w = vencedorDe(key);
+        if (w === 1) {
+          s1.V++;
+          s2.D++;
+          s1.Pts += 3;                          // vitória (normal ou pênaltis)
+          if (res.penais1 != null) s2.Pts += 1; // derrota nos pênaltis
+        } else if (w === 2) {
+          s2.V++;
+          s1.D++;
+          s2.Pts += 3;
+          if (res.penais1 != null) s1.Pts += 1;
+        }
+      }
+    }
+  }
+  stats.sort((a, b) =>
+    (b.Pts - a.Pts) ||
+    ((b.GP - b.GC) - (a.GP - a.GC)) ||
+    (b.GP - a.GP)
+  );
+  return stats;
+}
+
+function renderTabelaGeral() {
+  const tabela = document.getElementById("tabela-geral");
+  if (!tabela) return;
+  const hist = document.getElementById("historico-partidas");
+  const stats = computarEstatisticas();
+  const colunas = ["#", "Time", "Região", "J", "V", "D", "GP", "GC", "SG", "Am", "Vm", "Pts"];
+
+  let html = "<thead><tr>";
+  for (const col of colunas) html += "<th>" + col + "</th>";
+  html += "</tr></thead><tbody>";
+
+  if (stats.length === 0) {
+    html += '<tr><td colspan="12" style="padding:20px;color:var(--muted);text-align:center;">Adicione times e sorteie o chaveamento para começar a classificação.</td></tr>';
+  } else {
+    for (let i = 0; i < stats.length; i++) {
+      const s = stats[i];
+      const lider = i === 0 && s.J > 0;
+      html += "<tr" + (lider ? ' class="lider"' : "") + ">";
+      html += "<td>" + (i + 1) + "</td>";
+      html += '<td><div class="time-cell">' +
+        (s.time.logo ? '<img src="' + esc(s.time.logo) + '" alt="">' : "") +
+        '<span class="tg-nome">' + esc(s.time.nome || "Time sem nome") + "</span></div></td>";
+      html += '<td><span class="tg-reg">' + esc((s.time.regiao || "").trim() || "—") + "</span></td>";
+      html += "<td>" + s.J + "</td>";
+      html += "<td>" + s.V + "</td>";
+      html += "<td>" + s.D + "</td>";
+      html += "<td>" + s.GP + "</td>";
+      html += "<td>" + s.GC + "</td>";
+      html += "<td>" + (s.GP - s.GC) + "</td>";
+      html += "<td>" + (s.Am > 0 ? s.Am : "–") + "</td>";
+      html += "<td>" + (s.Vm > 0 ? s.Vm : "–") + "</td>";
+      html += '<td class="pts">' + s.Pts + "</td>";
+      html += "</tr>";
+    }
+  }
+  html += "</tbody>";
+  tabela.innerHTML = html;
+  renderHistorico(hist);
+}
+
+function renderHistorico(container) {
+  if (!container) return;
+  const itens = [];
+  const p = state.rodadas;
+  if (state.slots && p > 0) {
+    const T = state.slots.length;
+    for (let r = 1; r <= p; r++) {
+      const qtd = T / Math.pow(2, r);
+      for (let k = 0; k < qtd; k++) {
+        const key = r + "-" + k;
+        const res = state.resultados[key];
+        if (!res) continue;
+        const [t1, t2] = timesDoJogo(r, k);
+        if (t1 == null || t2 == null || t1 === undefined || t2 === undefined) continue;
+        const w = vencedorDe(key);
+        itens.push({ r: r, key: key, res: res, t1: t1, t2: t2, w: w });
+      }
+    }
+  }
+
+  container.innerHTML = "";
+  if (itens.length === 0) {
+    container.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:6px 2px;">Nenhuma partida registrada ainda. Clique em um jogo do chaveamento para lançar o placar e os cartões.</div>';
+    return;
+  }
+
+  for (const it of itens) {
+    const el = document.createElement("div");
+    el.className = "historico-item";
+    const c = it.res.cartoes || { a1: 0, v1: 0, a2: 0, v2: 0 };
+    const penais = it.res.penais1 != null && it.res.penais2 != null;
+    const vencedor = it.w === 1 ? it.t1 : it.w === 2 ? it.t2 : null;
+    const totalAm = c.a1 + c.a2;
+    const totalVm = c.v1 + c.v2;
+    let cartoesTxt = "";
+    if (totalAm > 0) cartoesTxt += "🟨 " + totalAm;
+    if (totalVm > 0) cartoesTxt += (cartoesTxt ? " · " : "") + "🟥 " + totalVm;
+    el.innerHTML =
+      '<span class="h-roda">' + nomeRodada(it.r, state.rodadas) + " · Jogo " + (jogoIdMap[it.key] || it.key) + "</span>" +
+      '<span class="h-times">' + esc(it.t1.nome || "?") + "</span>" +
+      '<span class="h-placar">' + it.res.gols1 + " x " + it.res.gols2 +
+        (penais ? " <small>(" + it.res.penais1 + "-" + it.res.penais2 + " pen)</small>" : "") + "</span>" +
+      '<span class="h-times">' + esc(it.t2.nome || "?") + "</span>" +
+      (vencedor ? '<span class="h-venceu">→ ' + esc(vencedor.nome) + "</span>" : "") +
+      (cartoesTxt ? '<span class="h-cartoes">' + cartoesTxt + "</span>" : "");
+    container.appendChild(el);
+  }
+}
+
+/* ---------- Tabs (Chaveamento / Geral) ---------- */
+
+function ativarTab(qual) {
+  const mostrarArvore = qual === "arvore";
+  const tabA = document.getElementById("tab-arvore");
+  const tabG = document.getElementById("tab-geral");
+  if (!tabA || !tabG) return;
+  tabA.classList.toggle("ativa", mostrarArvore);
+  tabG.classList.toggle("ativa", !mostrarArvore);
+  const areaArvore = document.getElementById("area-arvore");
+  const painelGeral = document.getElementById("painel-geral");
+  if (areaArvore) areaArvore.style.display = mostrarArvore ? "block" : "none";
+  if (painelGeral) painelGeral.style.display = mostrarArvore ? "none" : "block";
+  if (!mostrarArvore) renderTabelaGeral();
+}
+
+document.getElementById("tab-arvore").addEventListener("click", () => ativarTab("arvore"));
+document.getElementById("tab-geral").addEventListener("click", () => ativarTab("geral"));
+document.getElementById("modal-backdrop").addEventListener("click", fecharModalResultado);
+document.getElementById("modal-fechar").addEventListener("click", fecharModalResultado);
+
 /* ---------- Animação do sorteio ---------- */
 
 function iniciarSorteio() {
@@ -799,10 +1292,12 @@ function iniciarSorteio() {
   }
   state.slots = res.slots;
   state.rodadas = res.rodadas;
+  state.resultados = {}; // novo sorteio = nova competição (limpa placares)
 
   painelRegra.style.display = "none";
   painelTimes.style.display = "none";
   telaResultado.style.display = "block";
+  ativarTab("arvore");
 
   badgeRegra.textContent = (state.regra === "final" ? "Proteção: Apenas na Final" : "Proteção: Semifinal ou Final") +
     " · Regiões separadas " + (state.regra === "final" ? "até a decisão" : "até a semi");
@@ -827,9 +1322,10 @@ function abrirPaginaLimpa() {
   
   // Salvar dados para a página limpa (localStorage é compartilhado entre abas)
   const dados = {
-    slots: state.slots.map(t => t ? { nome: t.nome, regiao: t.regiao, logo: t.logo, _cor: t._cor } : null),
+    slots: state.slots.map(t => t ? { id: t.id, nome: t.nome, regiao: t.regiao, logo: t.logo, _cor: t._cor } : null),
     rodadas: state.rodadas,
     regra: state.regra,
+    resultados: state.resultados,
     timestamp: Date.now()
   };
   
@@ -901,6 +1397,7 @@ function animarSorteio() {
     const totalJogos = Math.pow(2, state.rodadas) - 1;
     await espera(totalJogos * 600 + 1400);
     soltarConfete();
+    renderTabelaGeral();
   })();
 }
 
@@ -982,6 +1479,8 @@ function initPaginaLimpa() {
     telaResultado.style.display = "block";
     document.querySelector(".resultado-top").style.display = "none";
     document.querySelector(".zoom-row").style.display = "none";
+    document.querySelector(".tabs").style.display = "none";
+    document.getElementById("painel-geral").style.display = "none";
     document.getElementById("arvore-scroll").style.border = "none";
     document.getElementById("arvore-scroll").style.background = "transparent";
     
@@ -995,6 +1494,7 @@ function initPaginaLimpa() {
           state.slots = dados.slots.map(t => t ? Object.assign({}, t, { _cor: t._cor }) : null);
           state.rodadas = dados.rodadas;
           state.regra = dados.regra;
+          state.resultados = dados.resultados || {};
           // Re-renderizar árvore
           renderArvore(state.slots, state.rodadas);
           // Zoom inicial 100% para página limpa
@@ -1039,5 +1539,9 @@ if (state.times.length > 0) {
 window.__sorteio = {
   sortear, validarSlots, faseColisao, shuffle,
   state, POTENCIAS, renderArvore, aplicarZoom,
-  proximaPotencia2, potenciaDe2, semDuplaFolga
+  proximaPotencia2, potenciaDe2, semDuplaFolga,
+  vencedorDe, timesDoJogo, computarEstatisticas,
+  renderTabelaGeral, abrirModalResultado
 };
+
+renderTabelaGeral();
