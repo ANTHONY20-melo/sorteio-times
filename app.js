@@ -663,7 +663,7 @@ function renderArvore(slots, p) {
       jogo.className = "jogo";
       jogo.style.left = ((r - 1) * (COL_W + GAP_W)) + "px";
       jogo.style.top = top + "px";
-      jogo.style.animationDelay = ((jogoId - 1) * 110) + "ms";
+      jogo.style.animationDelay = ((jogoId - 1) * 600) + "ms";
 
       const num = document.createElement("span");
       num.className = "jogo-num";
@@ -855,41 +855,51 @@ function animarSorteio() {
   const espera = ms => new Promise(res => setTimeout(res, ms));
 
   (async () => {
-    await espera(1500);
+    await espera(2400);
 
-    // Revela a primeira partida real (pula folgas) com flip 3D
-    overlayTxt.textContent = "Revelando a primeira partida";
+    // Revela TODOS os confrontos da primeira rodada (pula folgas), um a um, com flip 3D
+    overlayTxt.textContent = "Revelando os confrontos";
     const sl = state.slots;
-    let kReveal = 0;
-    while (kReveal < sl.length / 2 && (!sl[2 * kReveal] || !sl[2 * kReveal + 1])) kReveal++;
-    const t1 = sl[2 * kReveal];
-    const t2 = sl[2 * kReveal + 1];
     revealContainer.classList.add("ativo");
-    const card = document.createElement("div");
-    card.className = "reveal-card";
-    card.innerHTML =
-      '<div class="reveal-jogo">Jogo ' + (kReveal + 1) + ' · ' + nomeRodada(1, state.rodadas) + '</div>' +
-      '<div class="reveal-times">' +
-      '<span class="rv">' + (t1.logo ? '<img class="reveal-logo" src="' + esc(t1.logo) + '" alt="">' : '') + esc(t1.nome || "?") + '<small>' + esc((t1.regiao || "").trim() || "—") + '</small></span>' +
-      '<span class="reveal-vs">VS</span>' +
-      '<span class="rv">' + (t2.logo ? '<img class="reveal-logo" src="' + esc(t2.logo) + '" alt="">' : '') + esc(t2.nome || "?") + '<small>' + esc((t2.regiao || "").trim() || "—") + '</small></span>' +
-      '</div>';
-    revealContainer.appendChild(card);
-    await espera(30);
-    card.classList.add("entrou");
-    await espera(1400);
-    card.classList.add("saiu");
-    await espera(450);
+
+    const confrontos = [];
+    for (let k = 0; k < sl.length / 2; k++) {
+      if (!sl[2 * k] || !sl[2 * k + 1]) continue;
+      confrontos.push({ k: k, t1: sl[2 * k], t2: sl[2 * k + 1] });
+    }
+
+    for (let i = 0; i < confrontos.length; i++) {
+      const j = confrontos[i];
+      const t1 = j.t1;
+      const t2 = j.t2;
+      const card = document.createElement("div");
+      card.className = "reveal-card";
+      card.innerHTML =
+        '<div class="reveal-jogo">Jogo ' + (j.k + 1) + ' · ' + nomeRodada(1, state.rodadas) + '</div>' +
+        '<div class="reveal-times">' +
+        '<span class="rv">' + (t1.logo ? '<img class="reveal-logo" src="' + esc(t1.logo) + '" alt="">' : '') + esc(t1.nome || "?") + '<small>' + esc((t1.regiao || "").trim() || "—") + '</small></span>' +
+        '<span class="reveal-vs">VS</span>' +
+        '<span class="rv">' + (t2.logo ? '<img class="reveal-logo" src="' + esc(t2.logo) + '" alt="">' : '') + esc(t2.nome || "?") + '<small>' + esc((t2.regiao || "").trim() || "—") + '</small></span>' +
+        '</div>';
+      revealContainer.appendChild(card);
+      await espera(60);
+      card.classList.add("entrou");
+      await espera(2200);
+      card.classList.add("saiu");
+      await espera(650);
+      card.remove();
+    }
+
+    revealContainer.classList.remove("ativo");
 
     // Fecha overlay e monta a árvore com as partidas entrando em sequência
     overlay.classList.add("saindo");
     renderArvore(state.slots, state.rodadas);
-    await espera(420);
+    await espera(650);
     overlay.classList.remove("ativo", "saindo");
-    revealContainer.classList.remove("ativo");
 
     const totalJogos = Math.pow(2, state.rodadas) - 1;
-    await espera(totalJogos * 110 + 800);
+    await espera(totalJogos * 600 + 1400);
     soltarConfete();
   })();
 }

@@ -242,7 +242,7 @@ header p { color: var(--muted); margin-top: 6px; font-size: 14px; }
   overflow: hidden;
   transition: border-color .2s;
   opacity: 0;
-  animation: deal-in .7s cubic-bezier(.2, .9, .3, 1.2) forwards;
+  animation: deal-in 1.3s cubic-bezier(.2, .9, .3, 1.15) forwards;
   transform-origin: left center;
 }
 .jogo.pendente { border-style: dashed; background: rgba(255, 255, 255, 0.02); }
@@ -418,12 +418,12 @@ header p { color: var(--muted); margin-top: 6px; font-size: 14px; }
   box-shadow: 0 0 40px rgba(108, 92, 231, 0.35);
   opacity: 0;
   transform: perspective(900px) rotateY(-70deg) scale(0.8);
-  transition: opacity .35s ease, transform .45s cubic-bezier(.2, .9, .3, 1.15);
+  transition: opacity .6s ease, transform .85s cubic-bezier(.2, .9, .3, 1.15);
 }
 .reveal-card.entrou { opacity: 1; transform: perspective(900px) rotateY(0) scale(1); }
 .reveal-card.saiu {
   opacity: 0; transform: perspective(900px) rotateY(70deg) scale(0.8);
-  transition: opacity .3s, transform .35s ease;
+  transition: opacity .55s, transform .7s ease;
 }
 .reveal-jogo { font-size: 11px; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); }
 .reveal-times { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 19px; font-weight: 800; }
